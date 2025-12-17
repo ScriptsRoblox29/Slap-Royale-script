@@ -47,95 +47,130 @@ local Section = MainTab:CreateSection("Remember, don't equip items if you're in 
 local ItemsTab = Window:CreateTab("Items", 4483362458) -- Title, Image
 
 local Button = ItemsTab:CreateButton({
-	Name = "Get all bombs",
-	Callback = function()
-		local Players = game:GetService("Players")
-		local VirtualInputManager = game:GetService("VirtualInputManager")
+Name = "Get all bombs",
+Callback = function()
+local Players = game:GetService("Players")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 
-		local player = Players.LocalPlayer
-		local character = player.Character or player.CharacterAdded:Wait()
-		local hrp = character:WaitForChild("HumanoidRootPart")
-		local itemsFolder = workspace:WaitForChild("Items")
+local player = Players.LocalPlayer  
+	local character = player.Character or player.CharacterAdded:Wait()  
+	local hrp = character:WaitForChild("HumanoidRootPart")  
+	local humanoid = character:WaitForChild("Humanoid")  
+	local itemsFolder = workspace:WaitForChild("Items")  
 
-		-- Toggle
-		if _G.GetBombsRunning then
-			_G.GetBombsStopId += 1
-			_G.GetBombsRunning = false
-			return
-		end
+	if not _G.GetBombsRunning then  
+		_G.GetBombsRunning = true  
+		_G.GetBombsStopId = (_G.GetBombsStopId or 0) + 1  
+		local id = _G.GetBombsStopId  
 
-		_G.GetBombsRunning = true
-		_G.GetBombsStopId = (_G.GetBombsStopId or 0) + 1
-		local id = _G.GetBombsStopId
+		Rayfield:Notify({  
+			Title = "Warning",  
+			Content = "Please cancel when there are 2 seconds left before the round starts to avoid being kicked (in the lobby)",  
+			Duration = 6.5,  
+			Image = "rewind",  
+		})  
 
-		Rayfield:Notify({
-			Title = "Warning",
-			Content = "Please cancel when there are 2 seconds left before the round starts to avoid being kicked (in the lobby)",
-			Duration = 6.5,
-			Image = "rewind",
-		})
+		local function getItemPosition(item)  
+			if item:IsA("BasePart") then return item.Position end  
+			if item:IsA("Model") then  
+				if item.PrimaryPart then return item.PrimaryPart.Position end  
+				local part = item:FindFirstChildWhichIsA("BasePart")  
+				if part then return part.Position end  
+			end  
+		end  
 
-		local function getItemPos(item)
-			if item:IsA("BasePart") then
-				return item.Position
-			elseif item:IsA("Model") then
-				if item.PrimaryPart then
-					return item.PrimaryPart.Position
-				end
-				local p = item:FindFirstChildWhichIsA("BasePart")
-				if p then return p.Position end
-			end
-		end
+		local function getClosestItem(nameFilter)  
+			local closest  
+			local shortest = math.huge  
+			for _, item in ipairs(itemsFolder:GetChildren()) do  
+				if item.Name:lower():find(nameFilter:lower()) then  
+					local pos = getItemPosition(item)  
+					if pos then  
+						local dist = (hrp.Position - pos).Magnitude  
+						if dist < shortest then  
+							shortest = dist  
+							closest = item  
+						end  
+					end  
+				end  
+			end  
+			return closest  
+		end  
 
-		local function pressF()
-			VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.F, false, game)
-			task.wait(0.05)
-			VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.F, false, game)
-		end
+		local function moveTowards(targetPos)  
+			humanoid.PlatformStand = true  
+			local distance = (hrp.Position - targetPos).Magnitude  
+			if distance <= 100 then  
+				hrp.CFrame = CFrame.new(targetPos + Vector3.new(0,0.7,0))  
+			else  
+				local startTime = tick()  
+				while _G.GetBombsStopId == id and (hrp.Position - targetPos).Magnitude > 1 do  
+					local dir = (targetPos - hrp.Position).Unit  
+					local step = dir * 14  
+					if step.Magnitude > (targetPos - hrp.Position).Magnitude then  
+						step = targetPos - hrp.Position  
+					end  
+					hrp.CFrame = CFrame.new(hrp.Position + step)  
+					task.wait(0.01)  
+					if tick() - startTime > 10 and (hrp.Position - targetPos).Magnitude > 350 then  
+						break  
+					end  
+				end  
+			end  
+			humanoid.PlatformStand = false  
+		end  
 
-		local function teleportAndPickup(item)
-			local pos = getItemPos(item)
-			if not pos then return end
+		local function pressF()  
+			VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.F, false, game)  
+			task.wait(0.05)  
+			VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.F, false, game)  
+		end  
 
-			hrp.CFrame = CFrame.new(pos + Vector3.new(0, 0.7, 0))
-			task.wait(0.25)
+		task.spawn(function()  
+			-- Pega um Forcefield Crystal primeiro  
+			local crystal = getClosestItem("Forcefield Crystal")  
+			if crystal then  
+				local pos = getItemPosition(crystal)  
+				if pos then  
+					moveTowards(pos)  
+					if _G.GetBombsStopId ~= id then return end  
+					task.wait(0.15)  
+					if (hrp.Position - pos).Magnitude <= 6 then pressF() end  
+					while _G.GetBombsStopId == id and crystal.Parent == itemsFolder do  
+						task.wait(0.05)  
+					end  
+					task.wait(0.5)  
+				end  
+			end  
 
-			if _G.GetBombsStopId ~= id then return end
-			pressF()
+			-- Agora pega todas as bombas  
+			while _G.GetBombsStopId == id and #itemsFolder:GetChildren() > 0 do  
+				local bomb = getClosestItem("bomb")  
+				if not bomb then break end  
+				local pos = getItemPosition(bomb)  
+				if not pos then break end  
 
-			while _G.GetBombsStopId == id and item.Parent == itemsFolder do
-				task.wait(0.05)
-			end
-		end
+				moveTowards(pos)  
+				if _G.GetBombsStopId ~= id then break end  
 
-		task.spawn(function()
-			-- 1️⃣ Forcefield Crystal
-			for _, item in ipairs(itemsFolder:GetChildren()) do
-				if item.Name:lower():find("forcefield crystal") then
-					teleportAndPickup(item)
-					break
-				end
-			end
+				task.wait(0.15)  
+				if (hrp.Position - pos).Magnitude <= 6 then pressF() end  
+				while _G.GetBombsStopId == id and bomb.Parent == itemsFolder do  
+					task.wait(0.05)  
+				end  
+				if _G.GetBombsStopId ~= id then break end  
+				task.wait(0.5)  
+			end  
 
-			-- 2️⃣ Todas as Bombs
-			while _G.GetBombsStopId == id do
-				local bombFound = false
-
-				for _, item in ipairs(itemsFolder:GetChildren()) do
-					if item.Name:lower():find("bomb") then
-						bombFound = true
-						teleportAndPickup(item)
-						task.wait(0.1)
-						break
-					end
-				end
-
-				if not bombFound then break end
-			end
-
-			_G.GetBombsRunning = false
-		end)
-	end,
+			_G.GetBombsRunning = false  
+			humanoid.PlatformStand = false  
+		end)  
+	else  
+		_G.GetBombsStopId += 1  
+		_G.GetBombsRunning = false  
+		humanoid.PlatformStand = false  
+	end  
+end,
 })
 
 local Button = ItemsTab:CreateButton({
