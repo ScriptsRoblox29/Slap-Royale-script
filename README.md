@@ -44,7 +44,7 @@ local Section = MainTab:CreateSection("Welcome! This is a Slap royale game explo
 
 local ItemsTab = Window:CreateTab("Items", 4483362458) -- Title, Image
 
-local Toggle = Tab:CreateToggle({
+local Toggle = ItemsTab:CreateToggle({
 	Name = "Get all items",
 	CurrentValue = false,
 	Flag = "Toggle1",
