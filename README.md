@@ -47,131 +47,105 @@ local Section = MainTab:CreateSection("Remember, don't equip items if you're in 
 local ItemsTab = Window:CreateTab("Items", 4483362458) -- Title, Image
 
 local Button = ItemsTab:CreateButton({
-Name = "Get all bombs",
-Callback = function()
-local Players = game:GetService("Players")
-local VirtualInputManager = game:GetService("VirtualInputManager")
+	Name = "Get all bombs",
+	Callback = function()
+		local Players = game:GetService("Players")
+		local VirtualInputManager = game:GetService("VirtualInputManager")
 
-local player = Players.LocalPlayer  
-	local character = player.Character or player.CharacterAdded:Wait()  
-	local hrp = character:WaitForChild("HumanoidRootPart")  
-	local humanoid = character:WaitForChild("Humanoid")  
-	local itemsFolder = workspace:WaitForChild("Items")  
+		local player = Players.LocalPlayer
+		local character = player.Character or player.CharacterAdded:Wait()
+		local hrp = character:WaitForChild("HumanoidRootPart")
+		local itemsFolder = workspace:WaitForChild("Items")
 
-	if not _G.GetBombsRunning then  
-		_G.GetBombsRunning = true  
-		_G.GetBombsStopId = (_G.GetBombsStopId or 0) + 1  
-		local id = _G.GetBombsStopId  
+		if _G.GetBombsRunning then
+			_G.GetBombsStopId += 1
+			_G.GetBombsRunning = false
+			return
+		end
 
-		Rayfield:Notify({  
-			Title = "Warning",  
-			Content = "Please cancel when there are 2 seconds left before the round starts to avoid being kicked (in the lobby)",  
-			Duration = 6.5,  
-			Image = "rewind",  
-		})  
+		_G.GetBombsRunning = true
+		_G.GetBombsStopId = (_G.GetBombsStopId or 0) + 1
+		local id = _G.GetBombsStopId
 
-		local function getItemPosition(item)  
-			if item:IsA("BasePart") then return item.Position end  
-			if item:IsA("Model") then  
-				if item.PrimaryPart then return item.PrimaryPart.Position end  
-				local part = item:FindFirstChildWhichIsA("BasePart")  
-				if part then return part.Position end  
-			end  
-		end  
+		Rayfield:Notify({
+			Title = "Warning",
+			Content = "Please cancel when there are 2 seconds left before the round starts to avoid being kicked (in the lobby)",
+			Duration = 6.5,
+			Image = "rewind",
+		})
 
-		local function getClosestItem(nameFilter)  
-			local closest  
-			local shortest = math.huge  
-			for _, item in ipairs(itemsFolder:GetChildren()) do  
-				if item.Name:lower():find(nameFilter:lower()) then  
-					local pos = getItemPosition(item)  
-					if pos then  
-						local dist = (hrp.Position - pos).Magnitude  
-						if dist < shortest then  
-							shortest = dist  
-							closest = item  
-						end  
-					end  
-				end  
-			end  
-			return closest  
-		end  
+		local function getItemPosition(item)
+			if item:IsA("BasePart") then return item.Position end
+			if item:IsA("Model") then
+				if item.PrimaryPart then return item.PrimaryPart.Position end
+				local p = item:FindFirstChildWhichIsA("BasePart")
+				if p then return p.Position end
+			end
+		end
 
-		local function moveTowards(targetPos)  
-			humanoid.PlatformStand = true  
-			local distance = (hrp.Position - targetPos).Magnitude  
-			if distance <= 100 then  
-				hrp.CFrame = CFrame.new(targetPos + Vector3.new(0,0.7,0))  
-			else  
-				local startTime = tick()  
-				while _G.GetBombsStopId == id and (hrp.Position - targetPos).Magnitude > 1 do  
-					local dir = (targetPos - hrp.Position).Unit  
-					local step = dir * 14  
-					if step.Magnitude > (targetPos - hrp.Position).Magnitude then  
-						step = targetPos - hrp.Position  
-					end  
-					hrp.CFrame = CFrame.new(hrp.Position + step)  
-					task.wait(0.01)  
-					if tick() - startTime > 10 and (hrp.Position - targetPos).Magnitude > 350 then  
-						break  
-					end  
-				end  
-			end  
-			humanoid.PlatformStand = false  
-		end  
+		local function getClosestItem(filter)
+			local closest
+			local shortest = math.huge
+			for _, item in ipairs(itemsFolder:GetChildren()) do
+				if item.Name:lower():find(filter:lower()) then
+					local pos = getItemPosition(item)
+					if pos then
+						local d = (hrp.Position - pos).Magnitude
+						if d < shortest then
+							shortest = d
+							closest = item
+						end
+					end
+				end
+			end
+			return closest
+		end
 
-		local function pressF()  
-			VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.F, false, game)  
-			task.wait(0.05)  
-			VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.F, false, game)  
-		end  
+		local function teleportTo(item)
+			local pos = getItemPosition(item)
+			if pos then
+				hrp.CFrame = CFrame.new(pos + Vector3.new(0, 0.7, 0))
+			end
+		end
 
-		task.spawn(function()  
-			-- Pega um Forcefield Crystal primeiro  
-			local crystal = getClosestItem("Forcefield Crystal")  
-			if crystal then  
-				local pos = getItemPosition(crystal)  
-				if pos then  
-					moveTowards(pos)  
-					if _G.GetBombsStopId ~= id then return end  
-					task.wait(0.15)  
-					if (hrp.Position - pos).Magnitude <= 6 then pressF() end  
-					while _G.GetBombsStopId == id and crystal.Parent == itemsFolder do  
-						task.wait(0.05)  
-					end  
-					task.wait(0.5)  
-				end  
-			end  
+		local function pressF()
+			VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.F, false, game)
+			task.wait(0.05)
+			VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.F, false, game)
+		end
 
-			-- Agora pega todas as bombas  
-			while _G.GetBombsStopId == id and #itemsFolder:GetChildren() > 0 do  
-				local bomb = getClosestItem("bomb")  
-				if not bomb then break end  
-				local pos = getItemPosition(bomb)  
-				if not pos then break end  
+		task.spawn(function()
+			local crystal = getClosestItem("Forcefield Crystal")
+			if crystal and _G.GetBombsStopId == id then
+				teleportTo(crystal)
+				task.wait(0.25)
+				pressF()
+				while _G.GetBombsStopId == id and crystal.Parent == itemsFolder do
+					task.wait(0.05)
+				end
+				task.wait(0.25)
+			end
 
-				moveTowards(pos)  
-				if _G.GetBombsStopId ~= id then break end  
+			while _G.GetBombsStopId == id do
+				local bomb = getClosestItem("bomb")
+				if not bomb then break end
 
-				task.wait(0.15)  
-				if (hrp.Position - pos).Magnitude <= 6 then pressF() end  
-				while _G.GetBombsStopId == id and bomb.Parent == itemsFolder do  
-					task.wait(0.05)  
-				end  
-				if _G.GetBombsStopId ~= id then break end  
-				task.wait(0.5)  
-			end  
+				teleportTo(bomb)
+				task.wait(0.25)
+				pressF()
 
-			_G.GetBombsRunning = false  
-			humanoid.PlatformStand = false  
-		end)  
-	else  
-		_G.GetBombsStopId += 1  
-		_G.GetBombsRunning = false  
-		humanoid.PlatformStand = false  
-	end  
-end,
+				while _G.GetBombsStopId == id and bomb.Parent == itemsFolder do
+					task.wait(0.05)
+				end
+
+				task.wait(0.25)
+			end
+
+			_G.GetBombsRunning = false
+		end)
+	end,
 })
+
 
 local Button = ItemsTab:CreateButton({
 	Name = "Bomb Bus",
@@ -404,4 +378,91 @@ local Button = PlayerTab:CreateButton({
 			_G.WalkSpeedToggled = false
 		end
 	end,
+})
+
+local autoTab = Window:CreateTab("Auto", 4483362458) -- Title, Image
+
+local Button = autoTab:CreateButton({
+    Name = "Auto Win (Use Slap Aura and disable lava and acid)",
+    Callback = function()
+        local Players = game:GetService("Players")
+        local LocalPlayer = Players.LocalPlayer
+        local RunService = game:GetService("RunService")
+        local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+        local Humanoid = Character:WaitForChild("Humanoid")
+        local Root = Character:WaitForChild("HumanoidRootPart")
+
+        local STEP = 12
+        local INTERVAL = 0.01
+        local CLOSE_DISTANCE = 30
+
+        _G.RagdollTrackerRunning = not _G.RagdollTrackerRunning
+        if not _G.RagdollTrackerRunning then
+            Humanoid.PlatformStand = false
+            return
+        end
+
+        Humanoid.PlatformStand = true
+
+        for _, part in ipairs(Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+
+        local function teleportStep(targetPos)
+            Root.AssemblyLinearVelocity = Vector3.zero
+            local dir = targetPos - Root.Position
+            if dir.Magnitude > STEP then
+                Root.CFrame = CFrame.new(Root.Position + dir.Unit * STEP) * CFrame.Angles(0, 0, math.pi)
+            else
+                Root.CFrame = CFrame.new(targetPos) * CFrame.Angles(0, 0, math.pi)
+            end
+        end
+
+        task.spawn(function()
+            local index = 1
+            local lastRagdolledPlayers = {}
+
+            while _G.RagdollTrackerRunning do
+                local playersList = Players:GetPlayers()
+                if #playersList <= 1 then task.wait() continue end
+                if index > #playersList then index = 1 end
+
+                local targetPlayer = playersList[index]
+                index += 1
+
+                if targetPlayer ~= LocalPlayer then
+                    local char = targetPlayer.Character
+                    if char then
+                        local hum = char:FindFirstChild("Humanoid")
+                        local hrp = char:FindFirstChild("HumanoidRootPart")
+                        local rag = char:FindFirstChild("Ragdolled")
+
+                        if hum and hrp and rag and hum.Health > 0 then
+                            lastRagdolledPlayers[targetPlayer] = false
+
+                            while _G.RagdollTrackerRunning do
+                                local dist = (Root.Position - hrp.Position).Magnitude
+                                teleportStep(hrp.Position)
+
+                                if dist <= CLOSE_DISTANCE then
+                                    Root.CFrame = CFrame.new(hrp.Position) * CFrame.Angles(0, 0, math.pi)
+                                end
+
+                                if rag.Value then
+                                    lastRagdolledPlayers[targetPlayer] = true
+                                    break
+                                end
+
+                                task.wait(INTERVAL)
+                            end
+                        end
+                    end
+                end
+                task.wait()
+            end
+            Humanoid.PlatformStand = false
+        end)
+    end,
 })
