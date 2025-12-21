@@ -201,88 +201,134 @@ local Button = ItemsTab:CreateButton({
 	end,
 })
 
+local Dropdown = ItemsTab:CreateDropdown({
+    Name = "Get All Items Speed",
+    Options = {"Safe", "Fast (May rarely kick)", "Faster (May kick)"},
+    CurrentOption = {"Safe"},
+    MultipleOptions = false,
+    Flag = "Dropdown1",
+    Callback = function(Options)
+        _G.GetItemsSpeedMode = Options[1]
+    end,
+})
+
 local Button = ItemsTab:CreateButton({
-	Name = "Get all items (May kick)",
+    Name = "Get all Items",
+    Callback = function()
+        local Players = game:GetService("Players")
+        local VirtualInputManager = game:GetService("VirtualInputManager")
+
+        local player = Players.LocalPlayer
+        local character = player.Character or player.CharacterAdded:Wait()
+        local hrp = character:WaitForChild("HumanoidRootPart")
+        local humanoid = character:WaitForChild("Humanoid")
+        local itemsFolder = workspace:WaitForChild("Items")
+
+        if _G.GetItemsRunning then
+            _G.GetItemsStopId = (_G.GetItemsStopId or 0) + 1
+            _G.GetItemsRunning = false
+            humanoid.PlatformStand = false
+            return
+        end
+
+        _G.GetItemsRunning = true
+        _G.GetItemsStopId = (_G.GetItemsStopId or 0) + 1
+        local id = _G.GetItemsStopId
+
+        local function getDelay()
+            if _G.GetItemsSpeedMode == "Fast (May rarely kick)" then
+                return 0.16
+            elseif _G.GetItemsSpeedMode == "Faster (May kick)" then
+                return 0.07
+            end
+            return 0.22
+        end
+
+        local function getItemPosition(item)
+            if item:IsA("BasePart") then
+                return item.Position
+            elseif item:IsA("Model") then
+                if item.PrimaryPart then
+                    return item.PrimaryPart.Position
+                end
+                local part = item:FindFirstChildWhichIsA("BasePart")
+                if part then
+                    return part.Position
+                end
+            end
+        end
+
+        local function getClosestItem()
+            local closest
+            local shortest = math.huge
+            for _, item in ipairs(itemsFolder:GetChildren()) do
+                local pos = getItemPosition(item)
+                if pos then
+                    local dist = (hrp.Position - pos).Magnitude
+                    if dist < shortest then
+                        shortest = dist
+                        closest = item
+                    end
+                end
+            end
+            return closest
+        end
+
+        local function pressF()
+            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.F, false, game)
+            task.wait(0.05)
+            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.F, false, game)
+        end
+
+        task.spawn(function()
+            while _G.GetItemsStopId == id and #itemsFolder:GetChildren() > 0 do
+                local item = getClosestItem()
+                if not item then break end
+
+                local pos = getItemPosition(item)
+                if not pos then break end
+
+                local oldCFrame = hrp.CFrame
+
+                hrp.CFrame = CFrame.new(pos + Vector3.new(0, 0.7, 0))
+                task.wait(getDelay())
+
+                if _G.GetItemsStopId ~= id then break end
+                pressF()
+
+                hrp.CFrame = oldCFrame
+
+                while _G.GetItemsStopId == id and item.Parent == itemsFolder do
+                    task.wait(0.05)
+                end
+
+                task.wait(0.05)
+            end
+
+            _G.GetItemsRunning = false
+            humanoid.PlatformStand = false
+        end)
+    end,
+})
+
+local Button = ItemsTab:CreateButton({
+	Name = "Anti Sit (important)",
 	Callback = function()
 		local Players = game:GetService("Players")
-		local VirtualInputManager = game:GetService("VirtualInputManager")
-		local player = Players.LocalPlayer
-		local character = player.Character or player.CharacterAdded:Wait()
-		local hrp = character:WaitForChild("HumanoidRootPart")
-		local humanoid = character:WaitForChild("Humanoid")
-		local itemsFolder = workspace:WaitForChild("Items")
+		local LocalPlayer = Players.LocalPlayer
+		local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+		local Humanoid = Character:WaitForChild("Humanoid")
 
-		if _G.GetItemsRunning then
-			_G.GetItemsStopId = (_G.GetItemsStopId or 0) + 1
-			_G.GetItemsRunning = false
-			humanoid.PlatformStand = false
-			return
-		end
-
-		_G.GetItemsRunning = true
-		_G.GetItemsStopId = (_G.GetItemsStopId or 0) + 1
-		local id = _G.GetItemsStopId
-
-		Rayfield:Notify({
-			Title = "Warning",
-			Content = "When there are 2 seconds left before the match starts, cancel the Get all items option.",
-			Duration = 6.5,
-			Image = "rewind",
-		})
-
-		local function getItemPosition(item)
-			if item:IsA("BasePart") then return item.Position end
-			if item:IsA("Model") then
-				if item.PrimaryPart then return item.PrimaryPart.Position end
-				local part = item:FindFirstChildWhichIsA("BasePart")
-				if part then return part.Position end
-			end
-		end
-
-		local function getClosestItem()
-			local closest
-			local shortest = math.huge
-			for _, item in ipairs(itemsFolder:GetChildren()) do
-				local pos = getItemPosition(item)
-				if pos then
-					local dist = (hrp.Position - pos).Magnitude
-					if dist < shortest then
-						shortest = dist
-						closest = item
-					end
-				end
-			end
-			return closest
-		end
-
-		local function pressF()
-			VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.F, false, game)
-			task.wait(0.05)
-			VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.F, false, game)
-		end
+		_G.AntiSitEnabled = not _G.AntiSitEnabled
+		if not _G.AntiSitEnabled then return end
 
 		task.spawn(function()
-			while _G.GetItemsStopId == id and #itemsFolder:GetChildren() > 0 do
-				local item = getClosestItem()
-				if not item then break end
-				local pos = getItemPosition(item)
-				if not pos then break end
-
-				hrp.CFrame = CFrame.new(pos + Vector3.new(0, 0.7, 0))
-				if _G.GetItemsStopId ~= id then break end
-
-				task.wait(0.25)
-				if (hrp.Position - pos).Magnitude <= 6 then pressF() end
-
-				while _G.GetItemsStopId == id and item.Parent == itemsFolder do
-					task.wait(0.05)
+			while _G.AntiSitEnabled and Character and Humanoid do
+				if Humanoid.Sit then
+					Humanoid.Sit = false
 				end
-
-				if _G.GetItemsStopId ~= id then break end
-				task.wait(0.25)
+				task.wait(0.05)
 			end
-			_G.GetItemsRunning = false
-			humanoid.PlatformStand = false
 		end)
 	end,
 })
@@ -383,21 +429,62 @@ local Button = PlayerTab:CreateButton({
 local autoTab = Window:CreateTab("Auto", 4483362458) -- Title, Image
 
 local Button = autoTab:CreateButton({
-    Name = "Auto Win (Use Slap Aura and disable lava and acid)",
+    Name = "Auto Win",
     Callback = function()
         local Players = game:GetService("Players")
-        local LocalPlayer = Players.LocalPlayer
         local RunService = game:GetService("RunService")
+
+        local LocalPlayer = Players.LocalPlayer
         local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
         local Humanoid = Character:WaitForChild("Humanoid")
         local Root = Character:WaitForChild("HumanoidRootPart")
+        local Backpack = LocalPlayer:WaitForChild("Backpack")
 
-        local STEP = 12
+        local STEP = 22
         local INTERVAL = 0.01
-        local CLOSE_DISTANCE = 30
+        local TOOL_DISTANCE = 20
 
         _G.RagdollTrackerRunning = not _G.RagdollTrackerRunning
+
+        local gloves = {}
+        local sizeConnections = {}
+
+        local function scanTools(container)
+            for _, tool in ipairs(container:GetChildren()) do
+                if tool:IsA("Tool") then
+                    for _, part in ipairs(tool:GetDescendants()) do
+                        if part:IsA("BasePart") and (part.Name == "Glove" or part.Name == "Hand") then
+                            if not gloves[tool] then
+                                gloves[tool] = {
+                                    part = part,
+                                    size = part.Size
+                                }
+
+                                part.Size = Vector3.new(40, 40, 40)
+                                part.Transparency = 1
+
+                                sizeConnections[tool] = part:GetPropertyChangedSignal("Size"):Connect(function()
+                                    if _G.RagdollTrackerRunning then
+                                        part.Size = Vector3.new(40, 40, 40)
+                                    end
+                                end)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
         if not _G.RagdollTrackerRunning then
+            for tool, data in pairs(gloves) do
+                if data.part then
+                    data.part.Size = data.size
+                    data.part.Transparency = 0
+                end
+            end
+            for _, c in pairs(sizeConnections) do
+                c:Disconnect()
+            end
             Humanoid.PlatformStand = false
             return
         end
@@ -409,6 +496,9 @@ local Button = autoTab:CreateButton({
                 part.CanCollide = false
             end
         end
+
+        scanTools(Backpack)
+        scanTools(Character)
 
         local function teleportStep(targetPos)
             Root.AssemblyLinearVelocity = Vector3.zero
@@ -422,7 +512,6 @@ local Button = autoTab:CreateButton({
 
         task.spawn(function()
             local index = 1
-            local lastRagdolledPlayers = {}
 
             while _G.RagdollTrackerRunning do
                 local playersList = Players:GetPlayers()
@@ -440,18 +529,21 @@ local Button = autoTab:CreateButton({
                         local rag = char:FindFirstChild("Ragdolled")
 
                         if hum and hrp and rag and hum.Health > 0 then
-                            lastRagdolledPlayers[targetPlayer] = false
-
                             while _G.RagdollTrackerRunning do
-                                local dist = (Root.Position - hrp.Position).Magnitude
                                 teleportStep(hrp.Position)
 
-                                if dist <= CLOSE_DISTANCE then
-                                    Root.CFrame = CFrame.new(hrp.Position) * CFrame.Angles(0, 0, math.pi)
+                                local dist = (Root.Position - hrp.Position).Magnitude
+
+                                if dist <= TOOL_DISTANCE then
+                                    for tool in pairs(gloves) do
+                                        if tool.Parent == Backpack then
+                                            tool.Parent = Character
+                                        end
+                                        tool:Activate()
+                                    end
                                 end
 
                                 if rag.Value then
-                                    lastRagdolledPlayers[targetPlayer] = true
                                     break
                                 end
 
@@ -460,8 +552,21 @@ local Button = autoTab:CreateButton({
                         end
                     end
                 end
+
                 task.wait()
             end
+
+            for tool, data in pairs(gloves) do
+                if data.part then
+                    data.part.Size = data.size
+                    data.part.Transparency = 0
+                end
+            end
+
+            for _, c in pairs(sizeConnections) do
+                c:Disconnect()
+            end
+
             Humanoid.PlatformStand = false
         end)
     end,
